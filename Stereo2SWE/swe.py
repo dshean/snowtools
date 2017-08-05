@@ -21,7 +21,7 @@ def plothist(ax, x,y,xlim,ylim):
     ax.pcolormesh(xedges,yedges,Hmasked,cmap='inferno',vmin=H_clim[0], vmax=H_clim[1])
 
 def get_snotel_sites(dem_ds):
-    snotel_fn = '/Users/dshean/src/conus/conus/snotel_latlon.csv'
+    snotel_fn = 'snotel_latlon.csv'
     snotel_srs = geolib.wgs_srs
     sites = np.loadtxt(snotel_fn, delimiter=',', dtype=None)
     dem_extent = geolib.ds_extent(dem_ds, snotel_srs)
