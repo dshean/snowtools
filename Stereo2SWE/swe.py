@@ -39,7 +39,8 @@ def plot_snotel(ax, dem_ds):
             bbox=dict(boxstyle='round,pad=0.1', fc='k', alpha=0.7)
             ax.annotate(str(int(lbl)), xy=(pX[i], pY[i]), xytext=(0, 4), textcoords='offset points', fontsize=8, color='w', bbox=bbox)
 
-site='baker'
+#site='baker'
+site='gm'
 
 prism_fn = '/Users/dshean/data/PRISM_ppt_30yr_normal_800mM2_10-05_winter_cum.tif'
 dem_fn = sys.argv[1]
@@ -62,14 +63,18 @@ dem_clim = malib.calcperc(dem, (1,99))
 #hs = iolib.ds_getma(hs_ds)
 hs_clim = (1,255)
 
-rho_s = 0.5
+#Should get this from Snotel
+#rho_s = 0.5
+rho_s = 0.36
+
 dz = iolib.ds_getma(dz_ds)
 swe = dz * rho_s
 #swe_clim = malib.calcperc(swe, (1,99))
 swe_f = filtlib.rolling_fltr(swe, size=5)
 swe_f = filtlib.gauss_fltr_astropy(swe, size=9)
 swe = swe_f
-swe_clim = np.array((0,6))
+#swe_clim = np.array((0,6))
+swe_clim = np.array((0,2))
 
 prism = iolib.ds_getma(prism_ds)/1000.
 prism = np.ma.array(prism, mask=np.ma.getmaskarray(swe))
@@ -117,7 +122,7 @@ aspect_clim = (0., 360.)
 swe_dem_slope, swe_dem_intercept, r_value, p_value, std_err = scipy.stats.linregress(swe, dem)
 swe_dem_f = swe_dem_slope * swe_clim + swe_dem_intercept
 
-if True:
+if False:
     f, axa = plt.subplots(1, 4, figsize=(10,2.5))
     dem_clim = malib.calcperc(dem, (5,99.9))
     plothist(axa[0], dem, swe, dem_clim, swe_clim)
@@ -140,7 +145,7 @@ if True:
     fig_fn = '%s_WY%i_SWE_WV_plots.png' % (site, wy)
     plt.savefig(fig_fn, dpi=300, bbox_inches='tight')
 
-if True:
+if False:
     swe = prism
     f, axa = plt.subplots(1, 4, figsize=(10,2.5), facecolor='w')
     dem_clim = malib.calcperc(dem, (5,99.9))

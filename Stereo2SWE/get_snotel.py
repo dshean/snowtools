@@ -1,8 +1,9 @@
 #! /usr/bin/env python
-"""
-Utility to fetch SNOTEL data
 
-Uses ulmo library and CUAHSI db
+"""
+Utility to fetch, filter and plot SNOTEL data
+
+Uses ulmo and CUAHSI db
 """
 
 import sys
@@ -15,7 +16,8 @@ import matplotlib.pyplot as plt
 import ulmo
 from ulmo.util import convert_datetime
 
-from pygeotools.lib import malib
+from pygeotools.lib import malib, timelib
+from glas_proc import sample
 
 #Get all site locations
 def get_latlon():
@@ -56,19 +58,25 @@ wsdlurl = "http://worldwater.byu.edu/interactive/snotel/services/index.php/cuahs
 dt_start = datetime(2007,10,1)
 dt_end = datetime.now()
 
-sitename = 'baker'
-#Baker site codes
-#Want to use output from swe.py, which searches for a given DEM extent
-sitecodelist = [999, 909, 1011, 910]
+#Get site codes
+#Hardcoded for now, Want to use output from swe.py, which searches for a given DEM extent
+#sitename = 'baker'
+#sitecodelist = [999, 909, 1011, 910]
+sitename = 'gm'
+sitecodelist = [622, 682]
+#List of variables to extract
+#Snow depth and SWE
 vlist = ['SNWD', 'WTEQ']
-#Incremental precip, cumulative precip
 #SNWD is cm
+#Incremental precip, cumulative precip
 #PRCP (mm), PREC (mm), SNWD (cm), TAVG, TMAX, TMIN, WTEQ (mm)
 #v = 'SNOTEL:SNWD'
 
 #DEM stack, can be used to plot lines on SNOTEL time series
-stack_fn = '/Volumes/SHEAN_1TB_SSD/site_poly_highcount_rect3/baker/swe/20130911_1938_1030010027BE9000_1030010026900000-DEM_8m_trans_20160604_1941_104001001D940300_104001001CB1B100-DEM_8m_trans_stack_22.npz'
+#stack_fn = '/Volumes/SHEAN_1TB_SSD/site_poly_highcount_rect3/baker/swe/20130911_1938_1030010027BE9000_1030010026900000-DEM_8m_trans_20160604_1941_104001001D940300_104001001CB1B100-DEM_8m_trans_stack_22.npz'
+stack_fn = '/Users/dshean/Documents/UW/SnowEx/20160925_1830_1040010022702400_1040010022B4D200-DEM_32m_trans_20170318_1842_104001002BA5A500_104001002991D700-DEM_32m_trans_stack_13.npz'
 stack = malib.DEMStack(stack_fn=stack_fn)
+stack_ds = stack.get_ds()
 dem_dt = stack.date_list
 
 #Accuracy of measurements, in cm
@@ -127,10 +135,11 @@ print("Plotting")
 vlist.append('Density')
 f, axa = plt.subplots(len(vlist), 1, sharex=True, figsize=(10,7.5))
 for sitecode in d.keys():
-    dt = d[sitecode]['dt']
+    #For some reason, can't subtract datetime from np.datetime64
+    dt = d[sitecode]['dt'].astype(datetime)
     for n,v in enumerate(vlist):
         vmed = np.ma.median(d[sitecode][v])
-        #vmean = np.ma.mean(d[sitecode][v[)
+        #vmean = np.ma.mean(d[sitecode][[)
         #lbl = '%s: %0.2f' % (sitecode, vmed)
         lbl = str(sitecode)
         p = axa[n].plot(dt, d[sitecode][v], marker='o', ms=1, linestyle='', label=lbl)
@@ -150,6 +159,13 @@ axa[2].set_ylabel('Density (g/cc)')
 if stack_fn is not None:
     for dt in dem_dt:
         axa[0].axvline(dt, color='k', alpha=0.2)
+        axa[2].axvline(dt, color='k', alpha=0.2)
+        for sitecode in d.keys():
+            #For some reason, can't subtract datetime from np.datetime64
+            dt_list = d[sitecode]['dt'].astype(datetime)
+            dt_idx = timelib.get_closest_dt_padded_idx(dt.date(), dt_list, pad=3)
+            rho_mean = np.mean(d[sitecode]['Density'][dt_idx])
+            print(dt, sitecode, rho_mean)
 
 plt.tight_layout()
 f.autofmt_xdate()
@@ -158,7 +174,7 @@ plt.savefig(fig_fn, bbox_inches='tight')
 fig_fn = '%s_SNOTEL.png' % sitename
 plt.savefig(fig_fn, dpi=300, bbox_inches='tight')
 
-axa[n].set_xlim(datetime(2013,8,1), datetime(2016,6,30))
+#axa[n].set_xlim(datetime(2013,8,1), datetime(2016,6,30))
 fig_fn = '%s_SNOTEL_2013-2016.png' % sitename
 f.set_size_inches(4,7.5)
 plt.tight_layout()
