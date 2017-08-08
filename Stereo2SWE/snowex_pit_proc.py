@@ -1,6 +1,10 @@
 #! /usr/env/bin python
 
-#Fetch all xlsx files
+"""
+Load and clean up preliminary SnowEx'17 Pit sites (xlsx files)
+Output csv of pit location, date, snow depth and bulk density 
+"""
+#First, fetch all xlsx files
 #wget -r -A '*xlsx' ftp://ftp.nsidc.org/pub/projects/SnowEx/colorado_year1/Field_Books/
 
 import sys
@@ -21,20 +25,26 @@ os.chdir(topdir)
 #2017-02-06/PIT_L36/pit_20170206_L36.xlsx
 xlsx_fn_list = glob.glob('*/*/*.xlsx')
 
+#Define spatial reference for reprojection
 utm13n_srs = osr.SpatialReference()
 utm13n_srs.SetUTM(13, 1)
 utm12n_srs = osr.SpatialReference()
 utm12n_srs.SetUTM(12, 1)
 
 print("Parsing %i files" % len(xlsx_fn_list))
+
 outlist = []
 for xlsx_fn in xlsx_fn_list:
     wb = openpyxl.load_workbook(xlsx_fn)
-    #This is PIT
     ws = wb.worksheets[0]
-    #pitname = ws['B6'].value
+
+    #Extract pit name from filename
     pitname = '_'.join(os.path.splitext(os.path.split(xlsx_fn)[-1])[0][12:].split('_')[1:])
-    print(ws['H4'].value, ws['H2'].value, ws['H6'].value)
+    #pitname = ws['B6'].value
+
+    #Extract systematic x and y coord
+    #Initial x, y, zone 
+    #print(ws['H4'].value, ws['H2'].value, ws['H6'].value)
     utmn = None
     if ws['H2'].value is not None:
         if '4826759' in ws['H2'].value:
@@ -62,20 +72,23 @@ for xlsx_fn in xlsx_fn_list:
         #These are sometimes swapped
         if utme > utmn:
             utmn, utme = utme, utmn
+
+        #Determine UTM zone
         if int(str(utme)[0]) == 2:
             utmzone = 13
         elif int(str(utme)[0]) == 7:
             utmzone = 12
-        #Some are in lat/lon (39.01053, 108.187)
+            #Transform coordinates to UTM 13N
+            print("Transformng coordinates to UTM 13N")
+            utme, utmn, dummy = geolib.cT_helper(utme, utmn, 0, utm12n_srs, utm13n_srs)
+        #Some points are in lat/lon (39.01053, 108.187)
         elif int(str(utme)[0]) == 3: 
             print("Transformng coordinates to UTM 13N")
             utme, utmn, dummy = geolib.cT_helper(utmn, utme, 0, geolib.wgs_srs, utm13n_srs)
         else:
             sys.exit(utme)
-        if utmzone != 13:
-            #Transform coordinates to UTM 13N
-            print("Transformng coordinates to UTM 13N")
-            utme, utmn, dummy = geolib.cT_helper(utme, utmn, 0, utm12n_srs, utm13n_srs)
+
+    #Extract depth
     depth = None
     if ws['F6'].value is not None and ws['F6'].value[0].isdigit():
         depth = float(ws['F6'].value.split('-')[-1].split()[0].split('cm')[0])
@@ -91,6 +104,8 @@ for xlsx_fn in xlsx_fn_list:
     profile_densityA = [float(x[0].value) for x in ws['E10:E33'] if x[0].value is not None and bool(re.match(r'^[0-9\.]*$', x[0].value))]
     profile_densityB = [float(x[0].value) for x in ws['F10:F33'] if x[0].value is not None and bool(re.match(r'^[0-9\.]*$', x[0].value))] 
     mean_density = np.hstack([profile_densityA, profile_densityB]).mean()
+
+    #Extract datetime
     #pit_date = int(os.path.split(xlsx_fn)[-1].split('_')[1])
     #pit_time = map(int, ws['O6'].value.split(':'))
     #pit_date = os.path.split(xlsx_fn)[-1].split('_')[1]
@@ -99,7 +114,7 @@ for xlsx_fn in xlsx_fn_list:
     pit_time = None
     if ws['O6'].value is not None:
         pit_time = ws['O6'].value.split(':')
-        #Attempt to clean up 12-hour vs 24-hour time
+        #Attempt to deal with 12-hour vs 24-hour time
         if pit_time[0] < 6:
             pit_time[0] += 12
     if pit_time is not None:
@@ -114,17 +129,18 @@ for xlsx_fn in xlsx_fn_list:
     print(out)
     outlist.append(out)
 
-
 csv_fn = 'snowex_pit_out.csv'
 print("Writing out: %s" % csv_fn)
 
 #This needs to be cleaned up 
 hdr = 'file,pitname,datetime,x_utm13n,y_utm13n,depth_m,density_kgm3'.split(',')
 fmt = '%s,%s,%s,%0.1f,%0.1f,%0.2f,%0.1f'
-#a = np.array(outlist)
-#np.savetxt(csv_fn, a,fmt=fmt, delimiter=',', header=hdr) 
+
 with open(csv_fn, "wb") as f:
     writer = csv.writer(f)
     writer.writerow(hdr)
     for row in outlist:
         writer.writerow((fmt % row).split(','))
+
+#a = np.array(outlist)
+#np.savetxt(csv_fn, a,fmt=fmt, delimiter=',', header=hdr) 
