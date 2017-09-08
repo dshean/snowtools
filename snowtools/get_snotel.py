@@ -17,7 +17,6 @@ import ulmo
 from ulmo.util import convert_datetime
 
 from pygeotools.lib import malib, timelib
-from glas_proc import sample
 
 #Get all site locations
 def get_latlon():

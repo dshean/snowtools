@@ -38,7 +38,7 @@ b = b[b[:,1:3].count(axis=1) == 2]
 dem_fn = '/Users/dshean/Documents/UW/SnowEx/preliminary_mos_20170504/gm_8m-tile-0.tif'
 hs_fn = '/Users/dshean/Documents/UW/SnowEx/preliminary_mos_20170504/gm_8m-tile-0_hs_az315.tif'
 #snowdepth_fn = '/Users/dshean/Documents/UW/SnowEx/preliminary_snowdepth_20170606/snowdepth_20170201-20170317_mos-tile-0.tif'
-snowdepth_fn = '/Users/dshean/Documents/UW/SnowEx/preliminary_snowdepth_20170606/snowdepth_20170201-20170317_mos-tile-0_filt5px.tif'
+snowdepth_fn = '/Users/dshean/Documents/UW/SnowEx/preliminary_snowdepth_20170606/snowdepth_tif/snowdepth_20170201-20170317_mos-tile-0_filt5px.tif'
 
 #Load and clip to common extent
 dem_ds, hs_ds, snowdepth_ds = warplib.memwarp_multi_fn([dem_fn, hs_fn, snowdepth_fn], extent='union')
@@ -99,22 +99,27 @@ f.savefig(fig_fn, dpi=300, bbox_inches='tight')
 #Map plot of snow depth
 f, ax = plt.subplots()
 ax.set_aspect('equal')
+ax.set_facecolor('k')
 ax.imshow(hs, cmap='gray')
 #clim = malib.calcperc(depth, (2,98))
 clim = (0,2)
 im = ax.imshow(snowdepth, cmap='inferno', clim=clim, alpha=0.7)
-sc = ax.scatter(x, y, s=s, c=depth, cmap='inferno', vmin=clim[0], vmax=clim[1], edgecolors='k')
 ax.set_ylim(dem.shape[0], 0)
 ax.set_xlim(0, dem.shape[1])
-pltlib.add_cbar(ax, sc, label='Snow Depth (m)')
+pltlib.add_cbar(ax, im, label='Snow Depth (m)')
 pltlib.add_scalebar(ax, geolib.get_res(dem_ds)[0])
 pltlib.hide_ticks(ax)
 fig_fn = 'snowex_gm_snowdepth.png'
+f.savefig(fig_fn, dpi=300, bbox_inches='tight')
+#Now overlay pits
+sc = ax.scatter(x, y, s=s, c=depth, cmap='inferno', vmin=clim[0], vmax=clim[1], edgecolors='k')
+fig_fn = 'snowex_gm_snowdepth_pitoverlay.png'
 f.savefig(fig_fn, dpi=300, bbox_inches='tight')
 
 #Map plot of elevation
 f, ax = plt.subplots()
 ax.set_aspect('equal')
+ax.set_facecolor('k')
 ax.imshow(hs, cmap='gray')
 clim = malib.calcperc(dem, (2,98))
 im = ax.imshow(dem, cmap='cpt_rainbow', clim=clim, alpha=0.5)
@@ -129,6 +134,7 @@ f.savefig(fig_fn, dpi=300, bbox_inches='tight')
 #Map plot of density 
 f, ax = plt.subplots()
 ax.set_aspect('equal')
+ax.set_facecolor('k')
 ax.imshow(hs, cmap='gray')
 clim = malib.calcperc(rho, (2,98))
 #clim = (200,400)
@@ -144,6 +150,7 @@ f.savefig(fig_fn, dpi=300, bbox_inches='tight')
 #Map plot of snow depth difference 
 f, ax = plt.subplots()
 ax.set_aspect('equal')
+ax.set_facecolor('k')
 ax.imshow(hs, cmap='gray')
 #clim = malib.calcperc(rho, (2,98))
 clim = (-1,1)
