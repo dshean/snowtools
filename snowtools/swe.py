@@ -10,41 +10,15 @@ import scipy.stats
 from imview.lib import pltlib
 from pygeotools.lib import warplib, geolib, iolib, malib, timelib, filtlib
 
-def plothist(ax, x,y,xlim,ylim):
-    bins = (100, 100)
-    H, xedges, yedges = np.histogram2d(x,y,range=[xlim,ylim],bins=bins)
-    H = np.rot90(H)
-    H = np.flipud(H)
-    Hmasked = np.ma.masked_where(H==0,H)
-    #Hmasked = H
-    H_clim = malib.calcperc(Hmasked, (0,99))
-    ax.pcolormesh(xedges,yedges,Hmasked,cmap='inferno',vmin=H_clim[0], vmax=H_clim[1])
-
-def get_snotel_sites(dem_ds):
-    snotel_fn = 'snotel_latlon.csv'
-    snotel_srs = geolib.wgs_srs
-    sites = np.loadtxt(snotel_fn, delimiter=',', dtype=None)
-    dem_extent = geolib.ds_extent(dem_ds, snotel_srs)
-    valid_idx = ((sites[:,2] > dem_extent[0]) & (sites[:,2] < dem_extent[2]) & (sites[:,1] > dem_extent[1]) & (sites[:,1] < dem_extent[3]))
-    valid_sites = sites[valid_idx]
-    return valid_sites
-    
-def plot_snotel(ax, dem_ds):
-    sites = get_snotel_sites(dem_ds)
-    if sites.size > 0:
-        mX, mY, dummy = geolib.cT_helper(sites[:,2], sites[:,1], 0, geolib.wgs_srs, geolib.get_ds_srs(dem_ds))
-        pX, pY = geolib.mapToPixel(mX, mY, dem_ds.GetGeoTransform())
-        ax.scatter(pX, pY, s=16, facecolors='w', edgecolors='k')
-        for i, lbl in enumerate(sites[:,0]):
-            bbox=dict(boxstyle='round,pad=0.1', fc='k', alpha=0.7)
-            ax.annotate(str(int(lbl)), xy=(pX[i], pY[i]), xytext=(0, 4), textcoords='offset points', fontsize=8, color='w', bbox=bbox)
-
 #site='baker'
 site='gm'
 
+#This is PRISM 30-year normal winter PRECIP
 prism_fn = '/Users/dshean/data/PRISM_ppt_30yr_normal_800mM2_10-05_winter_cum.tif'
+if os.path.exists(prism_fn):
+    fn_list.append(prism_fn)
+
 dem_fn = sys.argv[1]
-#hs_fn = os.path.splitext(dem_fn)[0]+'_hs_az315.tif'
 dz_fn = sys.argv[2]
 dem_ts = timelib.fn_getdatetime(dem_fn)
 wy = dem_ts.year + 1
@@ -60,7 +34,6 @@ dem = iolib.ds_getma(dem_ds)
 dem_clim = malib.calcperc(dem, (1,99))
 #dem_clim = (1200, 2950)
 
-#hs = iolib.ds_getma(hs_ds)
 hs_clim = (1,255)
 
 #Should get this from Snotel
@@ -99,9 +72,6 @@ if True:
     pltlib.add_cbar(axa[1], swe_im, label=r'SWE Estimate (m w.e., $\rho_s$=0.5)')
     axa[2].set_title('~30-year PRISM Normal: Oct-May Precip', fontdict={'fontsize':8})
     pltlib.add_cbar(axa[2], swe_im, label='Cumulative Precip (m w.e.)')
-
-    #plot_snotel(axa[2], dem_ds)
-    plot_snotel(axa[0], dem_ds)
 
     plt.tight_layout()
     fig_fn = '%s_WY%i_SWE_maps.png' % (site, wy)
