@@ -74,7 +74,9 @@ def site_filter_extent(extent, srs=geolib.wgs_srs, pad=None):
     #print(extent)
     #print(sites)
     if pad is not None:
-        print("Padding original extent by: %s m" % pad)
+        print("Padding original extent by: %s km" % pad)
+        #Convert to meters
+        pad *= 1000.
         extent = geolib.pad_extent(extent, width=pad)
         #print(extent)
     valid_idx = ((sites[:,1] > extent[0]) & (sites[:,1] < extent[2]) & (sites[:,2] > extent[1]) & (sites[:,2] < extent[3]))
