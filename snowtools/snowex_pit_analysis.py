@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 
 from pygeotools.lib import timelib, malib, iolib, warplib, geolib
 from imview.lib import pltlib
-from demcoreg import glas_proc
 
 #Output from snowex_pit_proc.py
 csv_fn = 'snowex_pit_out.csv'
@@ -52,7 +51,7 @@ depth = b[:,3]
 rho = b[:,4]
 
 #Sample DEM snow depth
-samp = glas_proc.sample(snowdepth_ds, b[:,1], b[:,2], pad=5)
+samp = geolib.sample(snowdepth_ds, b[:,1], b[:,2], pad=5)
 
 #Filter to throw out samples with significant roughness over sampled area
 samp_perc_thresh = 0.3
