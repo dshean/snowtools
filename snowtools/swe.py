@@ -42,7 +42,9 @@ parser = getparser()
 args = parser.parse_args()
 
 dem1_fn = args.dem1_fn
+dem1_ts = timelib.fn_getdatetime(dem1_fn)
 res = 'min'
+save = True 
 #For testing
 #res = 64
 
@@ -54,8 +56,8 @@ if args.dem2_fn is not None:
     print("Loading input DEMs into masked arrays")
     dem1 = iolib.ds_getma(dem1_ds, 1)
     dem2 = iolib.ds_getma(dem2_ds, 1)
+    dem2_ts = timelib.fn_getdatetime(dem2_fn)
     dz = dem2 - dem1
-    dem_ts = timelib.fn_getdatetime(dem2_fn)
     outprefix = os.path.splitext(os.path.split(dem1_fn)[1])[0]+'_'+os.path.splitext(os.path.split(dem2_fn)[1])[0]
 elif args.dz_fn is not None:
     dz_fn = args.dz_fn
@@ -64,17 +66,15 @@ elif args.dz_fn is not None:
     dem1 = iolib.ds_getma(dem1_ds, 1)
     dz = iolib.ds_getma(dz_ds, 1)
     #Try to pull out second timestamp from dz_fn
-    dem_ts = timelib.fn_getdatetime_list(dz_fn)[-1]
-    if dem_ts is None:
-        dem_ts = timelib.fn_getdatetime(dem1_fn)
+    dem2_ts = timelib.fn_getdatetime_list(dz_fn)[-1]
     outprefix = os.path.splitext(os.path.split(dz_fn)[1])[0]
 
 outprefix = os.path.join(args.outdir, outprefix)
 
 #Calculate water year
-wy = dem_ts.year
-if dem_ts.month >= 10:
-    wy = dem_ts.year + 1
+wy = dem1_ts.year + 1
+if dem1_ts.month >= 10:
+    wy = dem1_ts.year
 
 #These need to be updated in geolib to use gdaldem API
 hs = geolib.gdaldem_mem_ds(dem1_ds, processing='hillshade', returnma=True)
@@ -104,8 +104,11 @@ if args.filter:
 
 swe_clim = list(malib.calcperc(swe, (1,99)))
 swe_clim[0] = 0
+swe_clim = (0, 8)
 
 prism = None
+nax = 2
+figsize = (8, 4)
 if args.prism:
     #This is PRISM 30-year normal winter PRECIP
     prism_fn = '/Users/dshean/data/PRISM_ppt_30yr_normal_800mM2_10-05_winter_cum.tif'
@@ -115,20 +118,21 @@ if args.prism:
         prism = iolib.ds_getma(prism_ds)/1000.
         #Apply SWE mask, so we are only considering valid pixels
         prism = np.ma.array(prism, mask=np.ma.getmaskarray(swe))
+        nax = 3
+        figsize = (12, 4)
 
 if True:
     #Map plots
-    f, axa = plt.subplots(1, 2, figsize=(8,4), sharex=True, sharey=True, subplot_kw={'aspect':'equal', 'adjustable':'box-forced'})
-    #f, axa = plt.subplots(1, 3, figsize=(10,4), sharex=True, sharey=True, subplot_kw={'aspect':'equal', 'adjustable':'box-forced'})
+    f, axa = plt.subplots(1, nax, figsize=figsize, sharex=True, sharey=True, subplot_kw={'aspect':'equal', 'adjustable':'box-forced'})
     hs_im = axa[0].imshow(hs, vmin=hs_clim[0], vmax=hs_clim[1], cmap='gray')
     dem_im = axa[0].imshow(dem1, vmin=dem_clim[0], vmax=dem_clim[1], cmap='cpt_rainbow', alpha=0.5)
     axa[0].set_facecolor('k')
     swe_im = axa[1].imshow(swe, vmin=swe_clim[0], vmax=swe_clim[1], cmap='inferno')
     axa[1].set_facecolor('0.3')
-    axa[0].set_title('Late Summer %i' % dem_ts.year, fontdict={'fontsize':8})
+    axa[0].set_title('Late Summer %i' % dem1_ts.year, fontdict={'fontsize':8})
     pltlib.add_cbar(axa[0], dem_im, label='Elevation (m WGS84)')
     pltlib.add_scalebar(axa[0], res)
-    axa[1].set_title('WY%i (Summer %i to Spring %i Elev. Diff.)' % (wy, dem_ts.year, (dem_ts.year+1)), fontdict={'fontsize':8})
+    axa[1].set_title('WY%i (Summer %i to Spring %i Elev. Diff.)' % (wy, dem1_ts.year, (dem1_ts.year+1)), fontdict={'fontsize':8})
     pltlib.add_cbar(axa[1], swe_im, label=r'SWE Estimate (m w.e., $\rho_s$=0.5)')
     if prism is not None:
         #Should use f.add_subplot() here
@@ -139,8 +143,11 @@ if True:
     for ax in axa:
         pltlib.hide_ticks(ax)
     plt.tight_layout()
-    #fig_fn = '%s_WY%i_SWE_maps.png' % (outprefix, wy)
-    #plt.savefig(fig_fn, dpi=300, bbox_inches='tight')
+    if save:
+        fig_fn = '%s_WY%i_SWE_maps.png' % (outprefix, wy)
+        if prism is not None:
+            fig_fn = os.path.splitext(fig_fn)[0]+'_prism.png'
+        plt.savefig(fig_fn, dpi=300, bbox_inches='tight')
 
 #Regression analysis, 2D Histogram plots
 #Needs to be cleaned up and tested
@@ -161,27 +168,34 @@ if True:
     aspect_clim = (0., 360.)
     if prism is not None:
         prism = np.ma.array(prism, mask=mask).compressed()
-        prism_clim = malib.calcperc(prism, (0,99))
+        #prism_clim = malib.calcperc(prism, (0,99))
+        prism_clim = swe_clim
 
     from imview.lib import pltlib
-    f, axa = plt.subplots(1, 3, figsize=(10,2.5))
-    pltlib.plot_2dhist(axa[0], dem1, swe, dem_clim, swe_clim, maxline=True, trendline=False)
+    f, axa = plt.subplots(1, nax+1, figsize=(10,2.5))
+    pltlib.plot_2dhist(axa[0], dem1, swe, dem_clim, swe_clim, maxline=False, trendline=False)
     axa[0].set_ylabel('SWE (m w.e.)')
     axa[0].set_xlabel('Elevation (m WGS84)')
-    pltlib.plot_2dhist(axa[1], slope, swe, slope_clim, swe_clim, maxline=True, trendline=False)
+    pltlib.plot_2dhist(axa[1], slope, swe, slope_clim, swe_clim, maxline=False, trendline=False)
     axa[1].set_ylabel('SWE (m w.e.)')
     axa[1].set_xlabel('Slope (deg)')
-    pltlib.plot_2dhist(axa[2], aspect, swe, aspect_clim, swe_clim, maxline=True, trendline=False)
+    pltlib.plot_2dhist(axa[2], aspect, swe, aspect_clim, swe_clim, maxline=False, trendline=False)
     axa[2].set_ylabel('SWE (m w.e.)')
     axa[2].set_xlabel('Aspect (deg)')
     if prism is not None:
-        pltlib.plot_2dhist(axa[3], prism, swe, prism_clim, swe_clim, maxline=True, trendline=False)
-        axa[3].set_ylabel('SWE (m w.e.)')
-        axa[3].set_xlabel('PRISM Precip (m w.e.)')
+        #pltlib.plot_2dhist(axa[3], prism, swe, prism_clim, swe_clim, maxline=False, trendline=False)
+        #axa[3].set_ylabel('SWE (m w.e.)')
+        #axa[3].set_xlabel('PRISM Precip (m w.e.)')
+        pltlib.plot_2dhist(axa[3], dem1, prism, dem_clim, prism_clim, maxline=False, trendline=False)
+        axa[3].set_ylabel('PRISM Precip (m w.e.)')
+        axa[3].set_xlabel('Elevation (m WGS84)')
     for ax in axa:
         ax.set_facecolor('0.3')
     plt.tight_layout()
-    #fig_fn = '%s_WY%i_SWE_WV_plots.png' % (site, wy)
-    #plt.savefig(fig_fn, dpi=300, bbox_inches='tight')
+    if save:
+        fig_fn = '%s_WY%i_SWE_hist.png' % (outprefix, wy)
+        if prism is not None:
+            fig_fn = os.path.splitext(fig_fn)[0]+'_prism.png'
+        plt.savefig(fig_fn, dpi=300, bbox_inches='tight')
 
 plt.show()
