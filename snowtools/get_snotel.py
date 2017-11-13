@@ -143,8 +143,8 @@ def getparser():
     group.add_argument('-fn', type=str, help='Raster filename to match (e.g., YYYYMMDD_raster.tif)')
     #parser.add_argument('-dt_pad', type=int, default=366, help='Combine data from this many days before and after target date (default: %(default)s)')
     group.add_argument('-extent', default=None, type=float, nargs=4, metavar=('MINLON', 'MINLAT', 'MAXLON', 'MAXLAT'), help='Spatial extent for query')
+    group.add_argument('-stack_fn', type=str, help='DEM stack filename to match (e.g., YYYYMMDD_YYYYMMDD_stack_n.tif)')
     parser.add_argument('-extent_pad', type=float, help='Amount to padding for extent, in km')
-    parser.add_argument('-stack_fn', type=str, help='DEM stack filename to match (e.g., YYYYMMDD_YYYYMMDD_stack_n.tif)')
     #Incremental precip, cumulative precip
     #PRCP (mm), PREC (mm), SNWD (cm), TAVG, TMAX, TMIN, WTEQ (mm)
     vlist_choices = ['PRCP', 'PREC', 'SNWD', 'TAVG', 'TMAX', 'TMIN', 'WTEQ']
@@ -173,6 +173,12 @@ if args.fn is not None:
         site_list = site_filter_extent_ds(ds, pad=args.extent_pad) 
 elif args.extent is not None:
     site_list = site_filter_extent(extent, pad=args.extent_pad)
+elif args.stack_fn is not None:
+    #DEM stack, can be used to plot lines on SNOTEL time series
+    stack = malib.DEMStack(stack_fn=args.stack_fn)
+    dem_dt = stack.date_list
+    ds = stack.get_ds()
+    site_list = site_filter_extent_ds(ds, pad=args.extent_pad) 
 else:
     sys.exit("Must provide valid raster filename or lat/lon extent")
 
@@ -185,15 +191,6 @@ if site_list is None:
     sys.exit("No valid sites identified")
 
 vlist = args.vlist
-
-#Clean this up
-if args.stack_fn is not None:
-    #DEM stack, can be used to plot lines on SNOTEL time series
-    #stack_fn = '/Volumes/SHEAN_1TB_SSD/site_poly_highcount_rect3/baker/swe/20130911_1938_1030010027BE9000_1030010026900000-DEM_8m_trans_20160604_1941_104001001D940300_104001001CB1B100-DEM_8m_trans_stack_22.npz'
-    #stack_fn = '/Users/dshean/Documents/UW/SnowEx/20160925_1830_1040010022702400_1040010022B4D200-DEM_32m_trans_20170318_1842_104001002BA5A500_104001002991D700-DEM_32m_trans_stack_13.npz'
-    stack = malib.DEMStack(stack_fn=stack_fn)
-    stack_ds = stack.get_ds()
-    dem_dt = stack.date_list
 
 #Accuracy of measurements, in cm
 #https://www.wcc.nrcs.usda.gov/snotel/snotel_sensors.html
