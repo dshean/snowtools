@@ -7,7 +7,11 @@ A collection of tools for processing and analyzing snow data
 - Automated retrieval and processing of MODSCAG fracitonal snow-covered area (fSCA) products
 - Automated retrieval and processing of SNODAS model snow depth 
 
-## Examples 
+## Examples
+
+![Rainier example](docs/rainier_snowdepth_2015-2017_sm.jpg)
+
+## Tools 
 - `get_snotel.py` - retrieve SNOTEL data for a given input extent (e.g., raster snow depth map from &#916;DEM)
   - Note: can use [`compute_dz.py`](https://github.com/dshean/demcoreg/blob/master/demcoreg/compute_dz.py) in demcoreg repo to compute snow depth from two arbitrary input DEMs (e.g. LiDAR, SfM, satellite stereo)
 - `swe.py` - convert snow depth raster to snow water equivalent (SWE)  
