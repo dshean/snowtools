@@ -3,7 +3,7 @@
 Utility to identify, download and process MODSCAG fractional snow-covered area (fSCA) to match an input raster
 
 """
-
+import sys
 import os
 import subprocess
 import argparse
@@ -152,7 +152,9 @@ def getparser():
     parser.add_argument('-date', default=None, help='By default, date is extracted from input raster filename. Use this override or specify arbitrary timestamp (format: YYYYMMDD)')
     parser.add_argument('-datadir', default=os.getcwd(), help='Directory to store intermediate products (default: %(default)s)')
     parser.add_argument('-pad', type=int, default=7, help='Combine data from this many days before and after target date (default: %(default)s)')
-    parser.add_argument('fn', type=str, help='Raster filename to match (e.g., YYYYMMDD_raster.tif)')
+    parser.add_argument('-fn', type=str, default=None, help='Raster filename to match (e.g., YYYYMMDD_raster.tif)')
+    parser.add_argument('-te', type=str, default=None, help='Extent, in provided proj4')
+    parser.add_argument('-proj4', type=str, default=None, help='Proj4 string for output projection')
     return parser
 
 def main():
@@ -169,14 +171,31 @@ def main():
         os.makedirs(datadir)
 
     fn = args.fn
-    ds = gdal.Open(fn)
-    print(fn)
+    if fn is not None: 
+        print("Output will match input file: %s" % fn)
+        ds = gdal.Open(fn)
+        #Extract timestamp from input filename
+        dt = timelib.fn_getdatetime(fn)
+    elif args.te is not None and args.proj4 is not None:
+        from osgeo import osr
+        t_srs = osr.SpatialReference()
+        t_srs.ImportFromProj4(args.proj4)
+        te = map(float, args.te.split())
+        #Assume MODIS res is 500 m
+        tr = 500
+        print("Output will have user-specified projection and extent")
+        ds = geolib.mem_ds(tr, te, t_srs)
+    else:
+        sys.exit("Must specify an input filename or extent/proj")
 
-    #Extract timestamp from input filename
-    dt = timelib.fn_getdatetime(fn)
+    #import ipdb; ipdb.set_trace()
+
     #If date is specified, extract timestamp 
     if args.date is not None:
         dt = timelib.fn_getdatetime(args.date)
+
+    if dt is None:
+        sys.exit("Must provide a fn with timestamp or specify date")
 
     #Get MODSCAG products for raster timestamp
     #These tiles cover CONUS
@@ -195,6 +214,9 @@ def main():
     if modscag_fn_list:
         modscag_ds = proc_modscag(modscag_fn_list, extent=ds, t_srs=ds)
 
+    if fn is None:
+        fn = dt.strftime('%Y%m%d')
+        
     out_fn_base = os.path.splitext(fn)[0]
 
     #Write out at original resolution 
