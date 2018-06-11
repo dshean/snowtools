@@ -148,12 +148,13 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     return ds
 
 def getparser():
-    parser = argparse.ArgumentParser(description="Identify, download, and process MODSCAG fSCA products to match an input raster") 
+    ex_str = "Example for Western CONUS: `get_modscag.py -date 20180601 -te '-883498 -1259670 1012222 775898' -proj4 '+proj=aea +lat_1=36 +lat_2=49 +lat_0=43 +lon_0=-115 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'`"
+    parser = argparse.ArgumentParser(description="Identify, download, and process MODSCAG fSCA products to match an input raster", epilog=ex_str) 
     parser.add_argument('-date', default=None, help='By default, date is extracted from input raster filename. Use this override or specify arbitrary timestamp (format: YYYYMMDD)')
     parser.add_argument('-datadir', default=os.getcwd(), help='Directory to store intermediate products (default: %(default)s)')
     parser.add_argument('-pad', type=int, default=7, help='Combine data from this many days before and after target date (default: %(default)s)')
     parser.add_argument('-fn', type=str, default=None, help='Raster filename to match (e.g., YYYYMMDD_raster.tif)')
-    parser.add_argument('-te', type=str, default=None, help='Extent, in provided proj4')
+    parser.add_argument('-te', type=str, default=None, help='Extent as a string of 4 floats')
     parser.add_argument('-proj4', type=str, default=None, help='Proj4 string for output projection')
     return parser
 
@@ -180,7 +181,7 @@ def main():
         from osgeo import osr
         t_srs = osr.SpatialReference()
         t_srs.ImportFromProj4(args.proj4)
-        te = map(float, args.te.split())
+        te = list(map(float, args.te.split()))
         #Assume MODIS res is 500 m
         tr = 500
         print("Output will have user-specified projection and extent")
@@ -201,8 +202,8 @@ def main():
     #These tiles cover CONUS
     #tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
     modscag_min_dt = datetime(2000,2,24)
-    if dt < modscag_min_dt: 
-	sys.exit("Raster timestamp (%s) is before earliest MODSCAG timestamp (%s)" % (dt, modscag_min_dt))
+    if dt < modscag_min_dt:
+        sys.exit("Raster timestamp (%s) is before earliest MODSCAG timestamp (%s)" % (dt, modscag_min_dt))
 
     tile_list = get_modis_tile_list(ds)
     print(tile_list)
