@@ -21,9 +21,9 @@ dem_mosaic -o $outdir/20170318_mos_${res}m.tif *20170317*00/dem_nomap/*-DEM_${re
 
 cd $outdir
 #Compute all elevation difference combinations
-all_dh.sh *_mos.tif
+compute_diff_all.sh *_mos.tif
 
 #Generate composites
-dem_mosaic -o all_snowdepth_${res}m_20170127-20170318.tif 20160925_mos_${res}m*eul.tif
-dem_mosaic -o 20160925_mos_${res}m_20170127-20170201_mos_dz_eul.tif 20160925_mos_${res}m_20170127_mos_dz_eul.tif 20160925_mos_${res}m_20170201_mos_dz_eul.tif
+dem_mosaic -o all_snowdepth_${res}m_20170127-20170318.tif 20160925_mos_${res}m*diff.tif
+dem_mosaic -o 20160925_mos_${res}m_20170127-20170201_mos_diff.tif 20160925_mos_${res}m_20170127_mos_diff.tif 20160925_mos_${res}m_20170201_mos_diff.tif
 
