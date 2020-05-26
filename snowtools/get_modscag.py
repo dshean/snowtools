@@ -68,6 +68,7 @@ def get_modscag(dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v0
     dt_list = timelib.dt_range(dt-pad_days, dt+pad_days+timedelta(1), timedelta(1))    
     
     out_vrt_fn_list = []
+    
     for dt in dt_list:
         out_vrt_fn = os.path.join(outdir, dt.strftime('%Y%m%d_snow_fraction.vrt'))
         #If we already have a vrt and it contains all of the necessary tiles, skip it
@@ -131,7 +132,6 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     
     out_fns = ['_count.tif', '_max.tif', '_min.tif', '_med.tif']
     out_fns = [stack_fn + fn for fn in out_fns]
-
     # Don't do this if the last stack fn exists
     if not os.path.exists(out_fns[-1]):
         #Create stack here - no need for most of pygeotools.lib.malib stack machinery, just make 3D array
@@ -154,8 +154,8 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
         for stack, out_fn in zip(stacks, out_fns):
             iolib.writeGTiff(stack, out_fn, ds_list[0])
 
-        ds = gdal.Open(out_fn)
-        return ds
+    ds = gdal.Open(out_fns[-1])
+    return ds
 
 def getparser():
     ex_str = "Example for Western CONUS: `get_modscag.py -date 20180601 -te '-883498 -1259670 1012222 775898' -proj4 '+proj=aea +lat_1=36 +lat_2=49 +lat_0=43 +lon_0=-115 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'`"
@@ -236,11 +236,13 @@ def run_tiles(args=None, fn=None, date=None):
 
         print("\n ====== WRITING TO FILE ====== ")        
         out_fn_base = os.path.splitext(fn)[0]
-        
+
         #Write out at original resolution
         out_fn = out_fn_base +'_modscag_fSCA.tif'
         if not os.path.exists(out_fn):
+            modscag_ds = proc_modscag(modscag_fn_list, extent=ds, t_srs=ds)
             modscag_perc = iolib.ds_getma(modscag_ds)
+
             print("Writing out %s" % out_fn)
             iolib.writeGTiff(modscag_perc, out_fn, src_ds=modscag_ds)
         else:
@@ -253,7 +255,7 @@ def run_tiles(args=None, fn=None, date=None):
             ds_out = warplib.memwarp_multi([modscag_ds,], res=ds, extent=ds, t_srs=ds, r='cubicspline')[0]            
             #Write out warped version
             modscag_perc = iolib.ds_getma(ds_out)
-            print("Writing out %s" % out_fn)            
+            print("Writing out %s" % out_fn)
             iolib.writeGTiff(modscag_perc, out_fn, src_ds=ds_out)
         else:
             print("Warped version exists")
@@ -264,4 +266,5 @@ def main():
     run_tiles(args)     # Check arguments, make directory paths and get and process tiles 
         
 if __name__ == "__main__":
+    
     main()
