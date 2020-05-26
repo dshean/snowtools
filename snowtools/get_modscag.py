@@ -53,12 +53,15 @@ def get_modscag(dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v0
     import re
     import requests
     from bs4 import BeautifulSoup
-    from requests.auth import HTTPDigestAuth
-
+    
+    print("\n ====== FETCHING TILES ====== ")
+    
     auth = iolib.get_auth()
 #     # Temporarily hardcode username and password to access MODSCAG
-#     uname = "user"
+#     uname = "username"
 #     pw = "password"
+
+#     from requests.auth import HTTPDigestAuth
 #     auth = HTTPDigestAuth(uname, pw)
     
     pad_days = timedelta(days=pad_days)
@@ -66,7 +69,6 @@ def get_modscag(dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v0
     
     out_vrt_fn_list = []
     for dt in dt_list:
-        print(dt)
         out_vrt_fn = os.path.join(outdir, dt.strftime('%Y%m%d_snow_fraction.vrt'))
         #If we already have a vrt and it contains all of the necessary tiles, skip it
         if os.path.exists(out_vrt_fn):
@@ -100,7 +102,6 @@ def get_modscag(dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v0
             if not modscag_url_fn:
                 print("Unable to fetch MODSCAG for %s" % dt)
             else:
-                #OK, we got
                 #Now extract actual tif filenames to fetch from html
                 parsed_html = BeautifulSoup(r.content, "html.parser")
                 #Fetch all tiles
@@ -125,8 +126,7 @@ def get_modscag(dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v0
 def proc_modscag(fn_list, extent=None, t_srs=None):
     """Process the MODSCAG products for full date range, create composites and reproject
     """
-    #Use cubic spline here for improve upsampling
-    ds_list = warplib.memwarp_multi_fn(fn_list, res='min', extent=extent, t_srs=t_srs, r='cubicspline')
+    #Use cubic spline here for improved upsampling
     stack_fn = os.path.splitext(fn_list[0])[0] + '_' + os.path.splitext(os.path.split(fn_list[-1])[1])[0] + '_stack_%i' % len(fn_list)
     
     out_fns = ['_count.tif', '_max.tif', '_min.tif', '_med.tif']
@@ -136,6 +136,8 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     if not os.path.exists(out_fns[-1]):
         #Create stack here - no need for most of pygeotools.lib.malib stack machinery, just make 3D array
         #Mask values greater than 100% (clouds, bad pixels, etc)
+        print("\n ====== PROCESSING TILES ====== ")
+        ds_list = warplib.memwarp_multi_fn(fn_list, res='min', extent=extent, t_srs=t_srs, r='cubicspline')
         ma_stack = np.ma.array([np.ma.masked_greater(iolib.ds_getma(ds), 100) for ds in np.array(ds_list)], dtype=np.uint8)
 
         stack_count = np.ma.masked_equal(ma_stack.count(axis=0), 0).astype(np.uint8)
@@ -166,30 +168,28 @@ def getparser():
     parser.add_argument('-proj4', type=str, default=None, help='Proj4 string for output projection')
     return parser
 
-def main():
-    parser = getparser()
-    args = parser.parse_args()
-
-    #Define top-level directory containing raster
-    topdir = os.getcwd()
-
-    #This directory will store final MODIS products
-    #datadir = iolib.get_datadir()
-    datadir = args.datadir
-    if not os.path.exists(datadir):
-        os.makedirs(datadir)
-
-    fn = args.fn
+def check_args(args=None, fn=None, date=None, datadir=os.getcwd(), pad_days=7):
+    ''' Check input arguments'''
+    
+    modscag_min_dt=datetime(2000,2,24) # earliest MODSCAG timestamp
+    
+    if args is not None:
+        datadir = args.datadir
+        fn = args.fn
+        pad_days=args.pad
+        te=args.te
+        proj4=args.proj4
+        date=args.date
     if fn is not None:
         print("Output will match input file: %s" % fn)
         ds = gdal.Open(fn)
         #Extract timestamp from input filename
         dt = timelib.fn_getdatetime(fn)
-    elif args.te is not None and args.proj4 is not None:
+    elif te is not None and proj4 is not None:
         from osgeo import osr
         t_srs = osr.SpatialReference()
-        t_srs.ImportFromProj4(args.proj4)
-        te = list(map(float, args.te.split()))
+        t_srs.ImportFromProj4(proj4)
+        te = list(map(float, te.split()))
         #Assume MODIS res is 500 m
         tr = 500
         print("Output will have user-specified projection and extent")
@@ -197,41 +197,47 @@ def main():
     else:
         sys.exit("Must specify an input filename or extent/proj")
 
-    #import ipdb; ipdb.set_trace()
-
     #If date is specified, extract timestamp
-    if args.date is not None:
-        dt = timelib.fn_getdatetime(args.date)
-
+    if date is not None:
+        dt = timelib.fn_getdatetime(date)
     if dt is None:
         sys.exit("Must provide a fn with timestamp or specify date")
-
-    #Get MODSCAG products for raster timestamp
-
-    modscag_min_dt = datetime(2000,2,24)
     if dt < modscag_min_dt:
         sys.exit("Raster timestamp (%s) is before earliest MODSCAG timestamp (%s)" % (dt, modscag_min_dt))
     
-#     tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05') #These tiles cover CONUS
-    tile_list = get_modis_tile_list(ds)
-    print("MODSCAG tiles:", tile_list)
-    
-    pad_days=args.pad
-
+    return datadir, fn, pad_days, ds, dt
+   
+def run_tiles(args=None, fn=None, date=None):
+    '''Execute code to fetch and process tiles given inputs (either parser args or fn and date)'''
+    if args is not None:
+        datadir, fn, pad_days, ds, dt = check_args(args)
+    elif (fn is not None) & (date is not None):
+        datadir, fn, pad_days, ds, dt = check_args(fn=fn, date=date)
+    else:
+        sys.exit("Missing input arguments or input fn/date")
+        
+    # Make directories
+    if not os.path.exists(datadir):
+        os.makedirs(datadir)
+        
+    # This directory will store final MODIS products
     modscag_outdir = os.path.join(datadir, 'modscag')
     if not os.path.exists(modscag_outdir):
         os.makedirs(modscag_outdir)
-        
+
+    # Get MODSCAG products for raster timestamp
+#     tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05') #These tiles cover CONUS
+    tile_list = get_modis_tile_list(ds)
+    print("\nMODSCAG tiles:", tile_list)    
+
     modscag_fn_list = get_modscag(dt, modscag_outdir, tile_list, pad_days)
-    print(modscag_fn_list)
     if modscag_fn_list:
         modscag_ds = proc_modscag(modscag_fn_list, extent=ds, t_srs=ds)
 
-        if fn is None:
-            fn = dt.strftime('%Y%m%d')
-
-        #Write out at original resolution
+        print("\n ====== WRITING TO FILE ====== ")        
         out_fn_base = os.path.splitext(fn)[0]
+        
+        #Write out at original resolution
         out_fn = out_fn_base +'_modscag_fSCA.tif'
         if not os.path.exists(out_fn):
             modscag_perc = iolib.ds_getma(modscag_ds)
@@ -243,17 +249,19 @@ def main():
         #Warp to match input raster
         out_fn = out_fn_base +'_modscag_fSCA_warp.tif'
         if not os.path.exists(out_fn):
-            print("Writing out %s" % out_fn)
-
             #Note: use cubicspline here to avoid artifacts with negative values
-            ds_out = warplib.memwarp_multi([modscag_ds,], res=ds, extent=ds, t_srs=ds, r='cubicspline')[0]
-
+            ds_out = warplib.memwarp_multi([modscag_ds,], res=ds, extent=ds, t_srs=ds, r='cubicspline')[0]            
             #Write out warped version
             modscag_perc = iolib.ds_getma(ds_out)
-
+            print("Writing out %s" % out_fn)            
             iolib.writeGTiff(modscag_perc, out_fn, src_ds=ds_out)
         else:
             print("Warped version exists")
+    
+def main():
+    parser = getparser()
+    args = parser.parse_args()
+    run_tiles(args)     # Check arguments, make directory paths and get and process tiles 
         
 if __name__ == "__main__":
     main()
