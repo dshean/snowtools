@@ -43,6 +43,8 @@ def get_modscag(dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v0
     """Function to fetch and process MODSCAG fractional snow cover products for input datetime
     Products are tiled in MODIS sinusoidal projection
     example url: https://snow-data.jpl.nasa.gov/modscag-historic/2015/001/MOD09GA.A2015001.h07v03.005.2015006001833.snow_fraction.tif
+    example url: https://snow-data.jpl.nasa.gov/modscag-historic/2015/001/MOD09GA.A2015001.h07v03.005.2015006001833.snow_fraction.tif
+    updated exampled url from 20210511 https://snow-data.jpl.nasa.gov/modscag/2019/118/MOD09GA.A2019118.h07v03.006.NRT.snow_fraction.tif
     """
 
     #Could also use global MODIS 500 m snowcover grids, 8 day
@@ -56,13 +58,13 @@ def get_modscag(dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v0
     
     print("\n ====== FETCHING TILES ====== ")
     
-    auth = iolib.get_auth()
-#     # Temporarily hardcode username and password to access MODSCAG
-#     uname = "username"
-#     pw = "password"
+#     auth = iolib.get_auth()
+    # Temporarily hardcode username and password to access MODSCAG
+    uname = "uname"
+    pw = "pw"
 
-#     from requests.auth import HTTPDigestAuth
-#     auth = HTTPDigestAuth(uname, pw)
+    from requests.auth import HTTPDigestAuth
+    auth = HTTPDigestAuth(uname, pw)
     
     pad_days = timedelta(days=pad_days)
     dt_list = timelib.dt_range(dt-pad_days, dt+pad_days+timedelta(1), timedelta(1))    
@@ -70,7 +72,9 @@ def get_modscag(dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v0
     out_vrt_fn_list = []
     
     for dt in dt_list:
+        print("dt is ", dt)
         out_vrt_fn = os.path.join(outdir, dt.strftime('%Y%m%d_snow_fraction.vrt'))
+        #print("out vrt fn is", out_vrt_fn)
         #If we already have a vrt and it contains all of the necessary tiles, skip it
         if os.path.exists(out_vrt_fn):
             vrt_ds = gdal.Open(out_vrt_fn)
@@ -90,25 +94,30 @@ def get_modscag(dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v0
             modscag_url_fn = []
             if r.ok:
                 parsed_html = BeautifulSoup(r.content, "html.parser")
-                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+                modscag_url_fn = parsed_html.findAll(href=re.compile('%s.*snow_fraction.tif' % tile))
+                #print("MODSCAG_URL_FN",modscag_url_fn)
             if not modscag_url_fn:
                 #Couldn't find historic, try to use real-time products
                 modscag_url_str = 'https://snow-data.jpl.nasa.gov/modscag/%Y/%j/' 
                 modscag_url_base = dt.strftime(modscag_url_str)
                 print("Trying: %s" % modscag_url_base)
                 r = requests.get(modscag_url_base, auth=auth)
-            if r.ok: 
+            print("r is", r)
+            if r.ok:
                 parsed_html = BeautifulSoup(r.content, "html.parser")
-                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+                #print("tile is", tile)
+                modscag_url_fn = parsed_html.findAll(href=re.compile('%s.*snow_fraction.tif' % tile))
+                #print("MODSCAG_URL_FN",modscag_url_fn)
             if not modscag_url_fn:
                 print("Unable to fetch MODSCAG for %s" % dt)
             else:
+                #print("We can fetch MODSCAG for %s" % dt)
                 #Now extract actual tif filenames to fetch from html
                 parsed_html = BeautifulSoup(r.content, "html.parser")
                 #Fetch all tiles
-                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+                modscag_url_fn = parsed_html.findAll(href=re.compile('%s.*snow_fraction.tif' % tile))
                 if modscag_url_fn:
-                    modscag_url_fn = modscag_url_fn[0]
+                    modscag_url_fn = modscag_url_fn[0]['href']
                     modscag_url = os.path.join(modscag_url_base, modscag_url_fn)
                     print(modscag_url)
                     modscag_fn = os.path.join(outdir, os.path.split(modscag_url_fn)[-1])
@@ -165,10 +174,11 @@ def getparser():
     parser.add_argument('-pad', type=int, default=7, help='Combine data from this many days before and after target date (default: %(default)s)')
     parser.add_argument('-fn', type=str, default=None, help='Raster filename to match (e.g., YYYYMMDD_raster.tif)')
     parser.add_argument('-te', type=str, default=None, help='Extent as a string of 4 floats')
+    parser.add_argument('-tr', type=float, default=500, help='Resolution as a float')    
     parser.add_argument('-proj4', type=str, default=None, help='Proj4 string for output projection')
     return parser
 
-def check_args(args=None, fn=None, date=None, datadir=os.getcwd(), pad_days=7):
+def check_args(args=None, fn=None, date=None, datadir=None, pad_days=None, te=None, proj4=None, tr=None):
     ''' Check input arguments'''
     
     modscag_min_dt=datetime(2000,2,24) # earliest MODSCAG timestamp
@@ -178,6 +188,7 @@ def check_args(args=None, fn=None, date=None, datadir=os.getcwd(), pad_days=7):
         fn = args.fn
         pad_days=args.pad
         te=args.te
+        tr=args.tr        
         proj4=args.proj4
         date=args.date
     if fn is not None:
@@ -191,7 +202,7 @@ def check_args(args=None, fn=None, date=None, datadir=os.getcwd(), pad_days=7):
         t_srs.ImportFromProj4(proj4)
         te = list(map(float, te.split()))
         #Assume MODIS res is 500 m
-        tr = 500
+        tr = tr
         print("Output will have user-specified projection and extent")
         ds = geolib.mem_ds(tr, te, t_srs)
     else:
@@ -204,15 +215,19 @@ def check_args(args=None, fn=None, date=None, datadir=os.getcwd(), pad_days=7):
         sys.exit("Must provide a fn with timestamp or specify date")
     if dt < modscag_min_dt:
         sys.exit("Raster timestamp (%s) is before earliest MODSCAG timestamp (%s)" % (dt, modscag_min_dt))
-    
+    if fn is None:
+        fn=date+".tif"
     return datadir, fn, pad_days, ds, dt
    
-def run_tiles(args=None, fn=None, date=None):
+def run_tiles(args=None, fn=None, date=None, te=None, proj4=None, tr=None):
     '''Execute code to fetch and process tiles given inputs (either parser args or fn and date)'''
+    print(args)
     if args is not None:
         datadir, fn, pad_days, ds, dt = check_args(args)
     elif (fn is not None) & (date is not None):
         datadir, fn, pad_days, ds, dt = check_args(fn=fn, date=date)
+    elif (te is not None) & (proj4 is not None):
+        datadir, fn, pad_days, ds, dt = check_args(te=te, proj4=proj4, tr=tr)        
     else:
         sys.exit("Missing input arguments or input fn/date")
         
@@ -226,9 +241,8 @@ def run_tiles(args=None, fn=None, date=None):
         os.makedirs(modscag_outdir)
 
     # Get MODSCAG products for raster timestamp
-#     tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05') #These tiles cover CONUS
     tile_list = get_modis_tile_list(ds)
-    print("\nMODSCAG tiles:", tile_list)    
+    print("\nMODSCAG tiles:", tile_list)
 
     modscag_fn_list = get_modscag(dt, modscag_outdir, tile_list, pad_days)
     if modscag_fn_list:
